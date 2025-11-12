@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Concordia Event Cost Quick Calculator (CAD)</title>
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --text:#e5e7eb; --muted:#9ca3af; --accent:#22c55e; --warn:#ef4444; --line:#1f2937; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans"; background: var(--bg); color: var(--text); }
+    .wrap { max-width: 980px; margin: 24px auto; padding: 0 16px; }
+    .card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+    h1 { font-size: 22px; margin: 0 0 6px; }
+    p.lead { color: var(--muted); margin: 0 0 16px; }
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+    .col-4 { grid-column: span 4; }
+    .col-12 { grid-column: span 12; }
+    label { font-size: 12px; color: var(--muted); display:block; margin-bottom: 6px; }
+    input[type="number"], input[type="text"], select { width: 100%; padding: 10px 12px; background: #0b1220; color: var(--text); border: 1px solid var(--line); border-radius: 10px; }
+    .slider { width: 100%; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { text-align: right; padding: 10px; border-bottom: 1px solid var(--line); }
+    th:first-child, td:first-child { text-align:left; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; }
+    .ok { background: rgba(34,197,94,0.15); color:#34d399; border:1px solid rgba(34,197,94,0.35); }
+    .over { background: rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.35); }
+    .btn { appearance:none; border:1px solid var(--line); background:#0b1220; color:var(--text); padding:10px 12px; border-radius:10px; cursor:pointer; }
+    .btn:hover { border-color:#334155; }
+    .footer { display:flex; gap:8px; justify-content:space-between; align-items:center; margin-top:8px; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <!-- iOS Quick Look / email preview warning -->
+  <div id="jsWarning" style="background:#7f1d1d;color:#fecaca;padding:10px 14px;font-size:14px;text-align:center;">
+    This viewer blocks calculators. Tap <b>Share</b> → <b>Open in Safari</b> to use this tool.
+  </div>
+  <noscript>
+    <div style="background:#7f1d1d;color:#fecaca;padding:10px 14px;font-size:14px;text-align:center;">
+      JavaScript is disabled or blocked. Open this file in Safari/Chrome to use the calculator.
+    </div>
+  </noscript>
+  <div class="wrap">
+    <div class="card">
+      <h1>Concordia Event Cost Quick Calculator (CAD)</h1>
+      <p class="lead">Now fixed in Canadian Dollars (CAD). Enter drink prices, reservation fee, and see totals instantly.</p>
+
+      <div class="grid box">
+        <div class="col-4">
+          <label>Reservation fee (CAD)</label>
+          <input id="resFee" type="number" step="0.01" value="0" />
+        </div>
+        <div class="col-4">
+          <label>Beer price (CAD)</label>
+          <input id="beerPrice" type="number" step="0.01" value="9" />
+        </div>
+        <div class="col-4">
+          <label>Mixed drink price (CAD)</label>
+          <input id="mixedPrice" type="number" step="0.01" value="9" />
+        </div>
+        <div class="col-4">
+          <label>Drinks per person</label>
+          <input id="drinksPerPerson" type="number" step="1" value="2" />
+        </div>
+        <div class="col-4">
+          <label>% of beer orders</label>
+          <input id="beerPct" class="slider" type="range" min="0" max="100" value="50" />
+          <div id="beerPctLabel" style="font-size:12px;color:#9ca3af;">Beer mix: 50% • Mixed: 50%</div>
+        </div>
+        <div class="col-4">
+          <label>Prepay X drinks (commitment)</label>
+          <input id="prepayDrinks" type="number" step="1" value="50" />
+        </div>
+        <div class="col-4">
+          <label>Auto-waive reservation fee at ≥ attendees</label>
+          <input id="waiveAt" type="number" step="1" placeholder="e.g., 40" />
+        </div>
+        <div class="col-4">
+          <label>Budget ceiling (CAD)</label>
+          <input id="budget" type="number" step="1" value="850" />
+        </div>
+      </div>
+
+      <table style="margin-top:16px;">
+        <thead>
+          <tr>
+            <th>Attendees</th>
+            <th>Blended price</th>
+            <th>Drinks total</th>
+            <th>Prepay value</th>
+            <th>Reservation fee</th>
+            <th>Total cost</th>
+            <th>Cap remaining</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+
+      <div class="footer">
+        <div id="note"></div>
+        <button class="btn" id="exportBtn">Export to PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const HEADCOUNTS=[25,30,40,50,60];
+    const resFeeEl=document.getElementById('resFee');
+    const beerPriceEl=document.getElementById('beerPrice');
+    const mixedPriceEl=document.getElementById('mixedPrice');
+    const drinksEl=document.getElementById('drinksPerPerson');
+    const beerPctEl=document.getElementById('beerPct');
+    const beerPctLabel=document.getElementById('beerPctLabel');
+    const prepayEl=document.getElementById('prepayDrinks');
+    const waiveAtEl=document.getElementById('waiveAt');
+    const budgetEl=document.getElementById('budget');
+    const rowsEl=document.getElementById('rows');
+    const noteEl=document.getElementById('note');
+    const exportBtn=document.getElementById('exportBtn');
+
+    function fmt(n){return isNaN(n)?'-':`$${n.toFixed(2)} CAD`;}
+
+    function update(){
+      const feeBase=parseFloat(resFeeEl.value)||0;
+      const beer=parseFloat(beerPriceEl.value)||0;
+      const mixed=parseFloat(mixedPriceEl.value)||0;
+      const dpp=parseInt(drinksEl.value)||0;
+      const beerPct=parseInt(beerPctEl.value)||0;
+      const prepay=parseInt(prepayEl.value)||0;
+      const waiveAt=parseInt(waiveAtEl.value)||null;
+      const budget=parseFloat(budgetEl.value)||0;
+      beerPctLabel.textContent=`Beer mix: ${beerPct}% • Mixed: ${100-beerPct}%`;
+      const blended=(beer*(beerPct/100))+(mixed*(1-(beerPct/100)));
+      const prepayValue=blended*prepay;
+      rowsEl.innerHTML='';
+      let cheapest={hc:null,total:Infinity};
+      [25,30,40,50,60].forEach(hc=>{
+        const drinksTotal=blended*dpp*hc;
+        const fee=(waiveAt && hc>=waiveAt)?0:feeBase;
+        const drinksCost=Math.max(prepayValue,drinksTotal);
+        const total=drinksCost+fee;
+        const capRemaining=budget-total;
+        if(total<cheapest.total)cheapest={hc,total};
+        const status=total<=budget?'<span class="pill ok">within budget</span>':'<span class="pill over">over budget</span>';
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${hc}</td><td>${fmt(blended)}</td><td>${fmt(drinksTotal)}</td><td>${fmt(prepayValue)}</td><td>${fmt(fee)}</td><td><strong>${fmt(total)}</strong></td><td>${fmt(capRemaining)}</td><td>${status}</td>`;
+        rowsEl.appendChild(tr);
+      });
+      noteEl.textContent=`Cheapest scenario: ${cheapest.hc||'-'} people at ${fmt(cheapest.total)}.`;
+    }
+
+    function exportPDF(){window.print();}
+
+    document.querySelectorAll('input').forEach(el=>el.addEventListener('input',update));
+    exportBtn.addEventListener('click',exportPDF);
+    update();
+    // Hide the warning once JS runs (Quick Look/email previews won’t run this)
+    const warn = document.getElementById('jsWarning');
+    if (warn) warn.style.display = 'none';
+  </script>
+</body>
+</html>
